@@ -122,7 +122,7 @@ explore: orders {
 </br>
 
 #### Use `#` comment syntax.
-Use a single `#` followed by a single space to begin a comment. When commenting on a field in a view file include it before the field.
+Use a single `#` followed by a single space to begin a comment. When commenting on a field in a view file include it as the first line of that dimension/measure (i.e. inside the dimension).
 
 Note that this is a departure from [Brooklyn Data Co.\'s preferred comment syntax for SQL](https://github.com/brooklyn-data/co/blob/main/sql_style_guide.md#always-use---comment-syntax) (`/* */`) because LookML does not recognize this syntax as a comment.
 
@@ -136,8 +136,8 @@ Note that this is a departure from [Brooklyn Data Co.\'s preferred comment synta
 
 
 # Good
-  # Date formatted dimension is required to join on other tables
   dimension: month_formatted {
+    # Date formatted dimension is required to join on other tables
     type: date
     sql: ${TABLE}."MONTH" ;;
   }
@@ -152,16 +152,53 @@ If you find yourself requiring the same table calculation in more than one Look 
 
 # LookML file management
 ## File browser
-Use folders to keep LookML files organized. Most projects will need a folder for `dashboards`, `models`, and `views`. You may find additional folders useful depending on the specific project (e.g., a `beta` folder for productionalized work that is released to a test group of users).
+Use folders to keep LookML files organized. Top level directories will be `dashboards`, `models`, `explores` and `views`.
 
-TODO: we will define sub directories in the `views` directory that we will align with the underlying DBT structure. Open question: if we need to add derived views we should prefix them with something like `derived_{view_name}`
+```
+# For all code defined dashboards
+dashboards/
+|-- l2_kpi_dashboard.dashboard
++-- ...
 
-![File Browser](looker_style_guide_images/file_browser.png)
+# For all models. We can probably combine many of these? Should be focused
+# on access use cases. Can break out if number of explores is unwieldy
+models/
+|-- all_company.model
+|-- finance.model
++-- ...
+
+explores/
+|-- people.explore.lkml
+|-- appointments.explore.lkml
+|-- specific_explore_measures/
+|   |-- people_measures.view
+|   |-- appointments_measures.view
++-- ...
+
+# For all models. We can have subdirectories that roughly map to DBT structure.
+views/
+|-- foundation/
+|   |-- fdn_dim_customers.view
+|   |-- fdn_fct_appointments.view
+|   |-- fdn_fct_iterable.view
+|   |-- ...
++-- mx/
+|   |-- iterable_aggregation.view
+|   +-- ...
++-- ...
+
+markdown/
+|-- homepage.md
++-- ...
+```
 
 </br>
 
 ## File naming
-Optimize for clarity and brevity. Where applicable, keep naming consistent with the underlying data model (e.g., [dbt](https://docs.getdbt.com/) data model).
+Optimize for clarity and brevity. We want to maintain alignment with DBT, but also want to give flexibility and ensure it is easy to understand what each file does.
+* We will drop prefixes like `fdn`
+* We will drop prefixes like `fct` and `dim` and `rpt`
+* We will add a suffix for any derived views in Looker (i.e. ones that include SQL) as `derived_`
 
 </br>
 
@@ -176,7 +213,7 @@ Optimize for clarity and brevity. Where applicable, keep naming consistent with 
 
 ##### Spacing
 - Leave an empty line of code before each major section header (see [Section headers](#section-headers) below)
-- Do not leave empty lines of code in between fields within the same section header
+- Leave an empty line of code between fields within the same section header
 
 ```
 # Bad
@@ -211,6 +248,7 @@ Optimize for clarity and brevity. Where applicable, keep naming consistent with 
     type: number
     sql: ${TABLE}."ORDER_ID" ;;
   }
+
   dimension: product_id {
     type: number
     sql: ${TABLE}."PRODUCT_ID" ;;
@@ -235,19 +273,13 @@ Optimize for clarity and brevity. Where applicable, keep naming consistent with 
   - help developers navigate lengthy view files
   - faciliate a better user experience in the Explore by aligning / organizing fields according to the view labels under which they will be nested. Because this style guide also recommends explicitly calling fields in Explores and in joined views, this approach is especially helpful if you are building Explores that use multiple joins: having fields classified under section headers helps developers choose the fields to surface in the Explore.
 - The following list includes common section headers and the preferred order to include them (when applicable).
-  - `## Primary Key` - Whenever possible define the primary key
-  - `## Parameters` - These fields will appear to the user under the ‘Filter-Only Fields’ section of the   field picker
-  - `## Filters` - These fields will appear to the user under the ‘Filter-Only Fields’ section of the field   picker.
-  - `## Foreign keys and IDs` - Hide keys and IDs that you expect users will not interact with (e.g.,   `product_id` or `distribution_center_id`)
-  - `## Timestamps`
-  - `## Duration`
-  - `## Flags` - Yes/No fields. These are typically modeled as `is_[characteristic]` or `has_[characteristic]`
-  - `## Properties` - List descriptive characteristics here such as `size`, `color`, `operating_system`, and `event_type`
-  - `## Statuses`
-  - `## Revenue`
-  - `## Costs`
-  - `## SLAs` - These fields contain Service Level Agreements
-  - `## Ratios and Percents`
+  - `## Keys and IDs` - Whenever possible define the primary key. Also include any other IDs in this section
+  - `## Parameters` - These fields will appear to the user under the ‘Filter-Only Fields’ section of the field picker
+  - `## Filters` - These fields will appear to the user under the ‘Filter-Only Fields’ section of the field picker.
+  - `## Dimensions`
+     - ... Additional subheadings as needed ...
+  - `## Measures`
+     - ... Additional subheadings as needed ...
   - `## Sets`
 
 _The list above is meant to serve as a guide only. You should adapt the number of sections in your list to the complexity of the modeling work and according to your use case._
@@ -256,15 +288,13 @@ _The list above is meant to serve as a guide only. You should adapt the number o
 - Use a single indentation to align section headers with the beginning of field declarations
 - Begin headers with two hashes (##) and a space
 - Group hidden fields in each section into a sub-section named `### Hidden`. This streamlines interacting with and reviewing what can be added to Explores the view file.
-- Within each section header do list:
-  - visible (i.e. not hidden) fields first
-  - dimensions and dimension groups before measures
-  - alphabetically to make it easier to find fields when scrolling through view files
+- Visible (i.e. not hidden) fields first
+- Dimensions and dimension groups before measures
 
 </br>
 
 ##### Sample View file
-- Your View file should look something like this [sample view file](looker_style_guide_code_snippets/sample_view_file.md)
+- (@jzielinski TODO) Your View file should look something like this [sample view file](looker_style_guide_code_snippets/sample_view_file.md)
   - Productivity tip: You can fold LookML to see a condensed view of the file. See [Shortcuts in the LookML development environment](https://docs.looker.com/exploring-data/exploring-data/keyboard-shortcuts#shortcuts_in_the_lookml_development_environment) for details.
 
 </br>
@@ -272,7 +302,7 @@ _The list above is meant to serve as a guide only. You should adapt the number o
 #### General guidelines for field naming
 ##### Dimensions
 ###### Flags
-- When naming `yesno` fields (e.g., `## Flags`), use an interrogative structure (e.g., “Is Returned” instead of “Returned”). This more naturally lends itself to the ‘yes’ or ‘no’ that appears in the column.
+- When naming `yesno` fields, use an interrogative structure (e.g., “Is Returned” instead of “Returned”). This more naturally lends itself to the ‘yes’ or ‘no’ that appears in the column.
 - Do not include “Yes/No” in the label of a `yesno` (boolean) field. Looker includes this by default.
 
 ```
@@ -284,22 +314,21 @@ _The list above is meant to serve as a guide only. You should adapt the number o
   }
 
 # Good
-  dimension: is_returned {
+  dimension: is_returned_item {
     type: yesno
     sql: ${returned_raw} IS NOT NULL ;;
-    label: "Is Returned Item"
   }
 ```
 
 </br>
 
 ###### Dimension group timeframes
-- Avoid the words `at`, `date` or `time` at the end of a dimension group field name. Looker appends each timeframe to the end of the dimension name: `created_date` becomes `created_date_date`, `created_date_month`, etc.
-  - Instead use `created` which becomes `created_date`, `created_month`, etc.
+- **When the field is a date** avoid the words `at`, `date` or `time` at the end of a dimension group field name. Looker appends each timeframe to the end of the dimension name: `created_date` becomes `created_date_date`, `created_date_month`, etc. Instead use `created` which becomes `created_date`, `created_month`, etc.
+- **When the field is a timestamp** use the word `at` as the suffix. In this case use `created_at`
 
 ```
 # Bad
-  dimension_group: created_at {
+  dimension_group: created_at_time {
     type: time
     timeframes: [
       time,
@@ -312,7 +341,7 @@ _The list above is meant to serve as a guide only. You should adapt the number o
   }
 
 # Good
-  dimension_group: created {
+  dimension_group: created_at {
     type: time
     timeframes: [
       time,
@@ -353,7 +382,6 @@ _The list above is meant to serve as a guide only. You should adapt the number o
 ```
 # Bad
   dimension: order_subtotal_usd {
-    type: sum
     sql: ${TABLE}."ORDER_SUBTOTAL_USD" ;;
   }
   measure: order_subtotal_usd_measure {
@@ -364,13 +392,14 @@ _The list above is meant to serve as a guide only. You should adapt the number o
 
 # Good
   dimension: _order_subtotal_usd {
-      label: "Order Subtotal USD"
-      type: sum
+      hidden: yes
       sql: ${TABLE}."ORDER_SUBTOTAL_USD" ;;
     }
   measure: order_subtotal_usd {
+      label: "Order Subtotal USD"
       type: sum
       sql: ${_order_subtotal_usd} ;;
+      value_format_name: usd_0
     }
 ```
 
