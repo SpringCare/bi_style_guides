@@ -564,17 +564,14 @@ There are [dozens of parameters](https://docs.looker.com/reference/field-referen
 </br>
 
 #### Avoid derived tables
-Brooklyn Data Co.\'s preference is to build Looker projects on top of a robust data warehouse using [dbt](https://docs.getdbt.com/) for data transformations. While there are occasional exceptions to the rule, move [derived tables](https://docs.looker.com/data-modeling/learning-lookml/derived-tables) to the underlying data model and adding dimensions and measures as needed to your LookML views whenever possible.
-- If you need to use a derived table, model them in a separate view file.
-Remember that you can keep your LookML code DRY (Don't Repeat Yourself) by referencing a derived table in another view using `.SQL_TABLE_NAME`. See the [documentation](https://docs.looker.com/reference/view-params/sql-for-derived_table) for more details.
-
-</br>
+Spring\'s **strong** preference is to build Looker projects on top of a robust data warehouse using [dbt](https://docs.getdbt.com/) for data transformations. In general, all [derived tables](https://docs.looker.com/data-modeling/learning-lookml/derived-tables) and associated logic should be moved to the underlying data model in DBT. The relevant dimensions and measures can then be added to your LookML views as necessary. We prefer this logic live in the warehouse because
+1. It enables us to use all of the tools DBT provides to visualize the code and dependencies, and test the data pipelines
+2. Makes it easier for Looker to query cached table data without needing to introduce PDTs
+3. Ensures that other users who want to take advantage of this logic can do so from Snwoflake directly vs. trying to replicate logic that only lives in Looker
 
 #### Using Liquid reference
 - Use new lines to separate Liquid tags and SQL/Looker fields
 - Use two spaces to indent each condition from the LookML parameter and four spaces to indent each output item.
-
-</br>
 
 ```
 # Bad
@@ -600,18 +597,84 @@ Remember that you can keep your LookML code DRY (Don't Repeat Yourself) by refer
   }
 ```
 
-</br>
+### Explores
+#### Overall
+- Explores should be created in their own separate files, not defined within the scope of a model file. This makes them easier to find and enables a nice pattern for handling measures that rely on columns from two different views - more details are in [this article](https://medium.com/@prabhakaran_arivalagan/comprehensive-guide-to-looker-deployment-and-best-practices-part-3-7802674580ef)
+- Explore files should be named descriptively, and use the extension `.explore.lkml`
+- Since you will be defining explore files directly, views will be included in your *Explore* rather than the model file.
+  - **Include only the views necessary for your model, and avoid the use of wildcards.**
+  - Including just the views required enables us to leverage the "metadata" in Looker to better understand where views are being used. See Looker's documentation on this [here](https://cloud.google.com/looker/docs/reference/param-model-include#:~:text=Looker%20does%20not%20recommend%20the,can%20clutter%20your%20database%20schema.).
+- Use the order of the following parameters (where applicable) to define your LookML Model. Include an empty line of code after each of the top-level parameters.
+  - Use the order of the following applicable parameters to define your [explores](https://docs.looker.com/reference/explore-reference)
+
+```
+include: "/path/to/view_file_1.view"
+include: "/path/to/view_file_2.view"
+include: "/path/to/view_file_3.view"
+
+explore:
+  hidden:
+  label:
+  group_label:
+  description:
+  extension:
+  extends:
+  required_access_grants:
+  access_filter:
+  always_filter:
+  sql_always_where:
+  view_name:
+  query:
+  fields:
+  always_join:
+  join: {
+    from:
+    required_access_grants:
+    view_label:
+    fields:
+    relationship:
+    type:
+    sql_on:
+    sql_where:
+}
+```
+
+#### Creating new explores
+- Avoid developing a single ‘one-stop’ Explore
+- Optimize the data consumer’s (i.e. non-technical user’s) experience by creating one Explore for each set of related business questions
+- It is also often helpful to think about the "grain" of the data that will go into an explore. For example, we have an explore focused on *people*, and their related metrics (how many covered lives are there? How many members were created in the last month? etc). We also have an explore focused on *appointments*, and their related metrics (how many appiontments were cancelled last month? How many appointments are currently booked for next week? etc).
+
+#### Explicitly select fields in Explores
+- Use the [fields (for Explores)](https://docs.looker.com/reference/explore-params/fields-for-explore) parameter to explicitly select all the fields or sets to be included in the Explore.
+- LookML developers will easily be able to identify which fields are included in the Explore without having to reference the view file or loading the Explore. This is especially helpful when the Explore includes multiple joins and a subset of fields from each joined view.
+
+#### Joining guidelines
+- Include only the joins you need to satisfy reporting requirements. Additional joins can negatively impact query performance and introduces additional code maintenance complexity
+- When possible be explicit with LookML in your joins. This will make your intentions clearer for other developers when reading, maintaining, or updating the Explore. Specific examples include:
+  - Do join views using `sql_on` instead of `foreign_key`
+  - Do use `relationship: many_to_one` and `type: left_outer` (where applicable) even though these are Looker’s default relationship and join type
+  - Do use fully scoped fields with the [fields (for Explores) parameter](https://docs.looker.com/reference/explore-params/fields-for-explore) to explicitly identify what users will see in the Explore's field picker
+- Although LookML uses [symmetric aggregates](https://docs.looker.com/reference/explore-params/symmetric_aggregates) by default to protect against fanout, use ‘many-to-one’ whenever possible. Some reasons for this extra caution include:
+  - It is possible to disable symmetric aggregates, in which case you'll need properly defined joins to avoid fanout
+  - Protect developers (including yourself!) who may use the Looker generated SQL to debug or run an ad-hoc report (e.g., in SQL Runner, in an IDE)
+  - Read more about this topic in this [Looker blog post](https://looker.com/blog/aggregate-functions-gone-bad-and-the-joins-who-made-them-that-way) and [Looker Community post](https://community.looker.com/lookml-5/symmetric-aggregates-261)
+- For more detail check out Looker's documentaiton on [Working with joins in LookML](https://docs.looker.com/data-modeling/learning-lookml/working-with-joins)
+
+#### Explore Field Picker layout
+- Use view labels to help data consumers quickly navigate the Explore Field Picker
+- By default, fields from a given view will show up under the [view_label]((https://docs.looker.com/reference/field-params/view_label)) defined in a given view (if no `view_label` is specified, then it will use the name of the view). This is preferable as it ensures a consistent UX across various Explores.
+- Sometimes you may want to override the default `view_label` from a view. In these cases, consider using view labels [for Joins](https://docs.looker.com/reference/explore-params/view_label-for-join), or [for Explores](https://docs.looker.com/reference/explore-params/view_label-for-explore). This will give you more control over how the fields show up in the explore. Remember, overriding the defaults makes it harder to understand which fields are the "same" from explore to explore, so use this thoughtfully.
+
+#### Sample explore file
+TODO
 
 ### Models
 #### Model LookML layout
 ##### Overall
 - Use in-line comments as section headers. Common section headers and their order include:
   - \## Model configuration
-  - \## Explores
 - Use the order of the following parameters (where applicable) to define your LookML Model
   - Include an empty line of code after each one of these parameters
-
-</br>
 
 ```
 label:
@@ -623,116 +686,18 @@ datagroup:
 access_grant:
 
 include:
-
-explore:
-
-  join:
-
-  join:
 ```
-
-</br>
 
 ##### Label
-- Use [label (for models)](https://docs.looker.com/reference/model-params/label-for-model) to define a custom label if the model’s name isn’t concise or descriptive enough for the Explore menu
-
-</br>
+- Use [label (for models)](https://docs.looker.com/reference/model-params/label-for-model) to define a custom label if the model’s name isn’t concise or descriptive enough for the Explore menu.
+- Note that this will be overridden by the `group_label` defined in the explore files you'll create.
 
 ##### Include
-- Include all views from the `views` folder in the project (`"/views/*.view.lkml"`) unless there is a reason not to
-- Similarly, include all dashboards from the `dashboards folder` in the project (`"/dashboard/*.dashboard.lkml"`) unless there is a reason not to
-
-</br>
-
-##### Explore
-###### Overall
-- Use the order of the following applicable parameters to define your [explores](https://docs.looker.com/reference/explore-reference)
-
-```
-  explore:
-    hidden:
-    label:
-    group_label:
-    description:
-    extension:
-    extends:
-    required_access_grants:
-    access_filter:
-    always_filter:
-    sql_always_where:
-    view_name:
-    query:
-    fields:
-    always_join:
-    join: {
-      from:
-      required_access_grants:
-      view_label:
-      fields:
-      relationship:
-      type:
-      sql_on:
-      sql_where:
-  }
- ```
-
-</br>
-
-###### Creating new explores
-- Avoid developing a single ‘one-stop’ Explore
-  - Optimize the data consumer’s (i.e. non-technical user’s) experience by creating one Explore for each set of related business questions
-  - For example, business users at an e-commerce company analyzing orders might be overwhelmed by all the possible details related to a customer sale included in a single Explore. Developers should create multiple Explores to help users have a more a focused experience (e.g., Explores for Customers, Orders, Products, Shipping, etc.)
-
-</br>
-
-###### Explicitly select fields in Explores
-- Use the [fields (for Explores)](https://docs.looker.com/reference/explore-params/fields-for-explore) parameter to explicitly select all the fields or sets to be included in the Explore.
-  - LookML developers will easily be able to identify which fields are included in the Explore without having to reference the view file or loading the Explore. This is especially helpful when the Explore includes multiple joins and a subset of fields from each joined model.
-
-</br>
-
-##### Joining guidelines
-- Include only the joins you need to satisfy reporting requirements. Additional joins can negatively impact query performance and introduces additional code maintenance complexity
-- When possible be explicit with LookML in your joins. This will make your intentions clearer for other developers -- especially less experienced developers on your team -- when reading, maintaining, or updating the Explore. Specific examples include:
-  - Do join views using `sql_on` instead of `foreign_key`
-  - Do use `relationship: many_to_one` and `type: left_outer` (where applicable) even though these are Looker’s default relationship and join type
-  - Do use fully scoped fields with the [fields (for Explores) parameter](https://docs.looker.com/reference/explore-params/fields-for-explore) to explicitly identify what users will see in the Explore's field picker
-- Although LookML uses [symmetric aggregates](https://docs.looker.com/reference/explore-params/symmetric_aggregates) by default to protect against fanout, use ‘many-to-one’ whenever possible. Some reasons for this extra caution include:
-  - Not all SQL dialects support symmetric aggregates (see the [list of dialects](https://docs.looker.com/reference/explore-params/symmetric_aggregates#definition) that support symmetric aggregates)
-  - It is possible to disable symmetric aggregates, in which case you'll need properly defined joins to avoid fanout
-  - Protect developers (including yourself!) who may use the Looker generated SQL to debug or run an ad-hoc report (e.g., in SQL Runner, in an IDE)
-  - Read more about this topic in this [Looker blog post](https://looker.com/blog/aggregate-functions-gone-bad-and-the-joins-who-made-them-that-way) and [Looker Community post](https://community.looker.com/lookml-5/symmetric-aggregates-261)
-- For more detail check out Looker's documentaiton on [Working with joins in LookML](https://docs.looker.com/data-modeling/learning-lookml/working-with-joins)
-
-</br>
+- Since explore files are defined separately, they need to be included in your model file in order to be accessible. Names should be fully qualified; e.g. `/explores/my_explore.explore.lkml`. Include only the explores necessary for your model, and avoid the use of wildcards.
+- Similarly, include only the necessary dashboards.
 
 ##### Sample model file
-- Your model file should look something like this [sample model file](looker_style_guide_code_snippets/sample_model_file.md):
-  - Not all parameters are required and in some cases shouldn’t be used together
-
-</br>
-
-### Explores
-#### Explore Field Picker layout
-##### View label guidelines
-- Use view labels to help data consumers quickly navigate the Explore Field Picker
-  - It’s preferable to define with view labels at the [field level](https://docs.looker.com/reference/field-params/view_label) to ensure a consistent UX across various Explores
-  - For fields that roll up to different view labels -- depending on the Explore -- consider using view label [for Views](https://docs.looker.com/reference/view-params/label), [for Joins](https://docs.looker.com/reference/explore-params/view_label-for-join), [for Explores](https://docs.looker.com/reference/explore-params/view_label-for-explore)
-  - Standard view labels for common Explores may include:
-
-| **Explore**  | **Orders, Order Items, Products**, and similar…   | **Web Event Data, Web Session Data**, and similar…  |
-|:--------------:|:-------------:|:-----------------------:|
-| View labels  |  *_IDs      |  *_IDs                |
-|              |  Customers  |  Funnel Metrics       |
-|              |  Orders     |  Products             |
-|              |  Products   |  Session Bounce Page  |
-|              |  Shipping   |  Session Landing Page |
-|              |  Timestamps |  Sessions             |
-|              |  Users      |  Users                |
-|              |             |  Visitors             |
-|              |             |  Timestamps           |
-
-</br>
+TODO
 
 ### Dashboards
 #### LookML dashboard and user-defined dashboards
