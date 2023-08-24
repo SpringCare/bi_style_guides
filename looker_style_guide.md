@@ -370,14 +370,14 @@ _The list above is meant to serve as a guide only. You should adapt the number o
 # Good
   measure: total_transaction_amount {
     type: sum
-    sql: ${transaction_amount}
+    sql: ${transaction_amount}  # This is a dimension defined above
     value_format_name: usd
   }
 ```
 
 </br>
 
-- If a measure and a dimension reference the same ${TABLE}.”field\_name”, prefix the dimension with an underscore to differentiate between the two.
+- If a measure and a dimension reference the same ${TABLE}.”field\_name”, prefix the dimension with a **double underscore** to differentiate between the two.
 
 ```
 # Bad
@@ -391,14 +391,14 @@ _The list above is meant to serve as a guide only. You should adapt the number o
   }
 
 # Good
-  dimension: _order_subtotal_usd {
+  dimension: __order_subtotal_usd {
       hidden: yes
       sql: ${TABLE}."ORDER_SUBTOTAL_USD" ;;
     }
   measure: order_subtotal_usd {
       label: "Order Subtotal USD"
       type: sum
-      sql: ${_order_subtotal_usd} ;;
+      sql: ${__order_subtotal_usd} ;;
       value_format_name: usd_0
     }
 ```
@@ -606,6 +606,7 @@ Spring\'s **strong** preference is to build Looker projects on top of a robust d
   - Including just the views required enables us to leverage the "metadata" in Looker to better understand where views are being used. See Looker's documentation on this [here](https://cloud.google.com/looker/docs/reference/param-model-include#:~:text=Looker%20does%20not%20recommend%20the,can%20clutter%20your%20database%20schema.).
 - Use the order of the following parameters (where applicable) to define your LookML Model. Include an empty line of code after each of the top-level parameters.
   - Use the order of the following applicable parameters to define your [explores](https://docs.looker.com/reference/explore-reference)
+  - You should **always** include a description for each explore
 
 ```
 include: "/path/to/view_file_1.view"
@@ -645,8 +646,8 @@ explore:
 - It is also often helpful to think about the "grain" of the data that will go into an explore. For example, we have an explore focused on *people*, and their related metrics (how many covered lives are there? How many members were created in the last month? etc). We also have an explore focused on *appointments*, and their related metrics (how many appiontments were cancelled last month? How many appointments are currently booked for next week? etc).
 
 #### Explicitly select fields in Explores
-- Use the [fields (for Explores)](https://docs.looker.com/reference/explore-params/fields-for-explore) parameter to explicitly select all the fields or sets to be included in the Explore.
-- LookML developers will easily be able to identify which fields are included in the Explore without having to reference the view file or loading the Explore. This is especially helpful when the Explore includes multiple joins and a subset of fields from each joined view.
+- Use the [fields (for Explores)](https://docs.looker.com/reference/explore-params/fields-for-explore) parameter to explicitly select all the fields or sets to be included in the Explore. LookML developers will easily be able to identify which fields are included in the Explore without having to reference the view file or loading the Explore. This is especially helpful when the Explore includes multiple joins and a subset of fields from each joined view.
+  - The one acceptable alternative is to include a set of fields instead of those fields individually.
 
 #### Joining guidelines
 - Include only the joins you need to satisfy reporting requirements. Additional joins can negatively impact query performance and introduces additional code maintenance complexity
@@ -679,11 +680,11 @@ TODO
 ```
 label:
 
-connection:
+connection:  # Can only have one per model
 
-datagroup:
+datagroup:  # Can have multiple datagroups defined
 
-access_grant:
+access_grant:  # Can have multiple access grants defined
 
 include:
 ```
@@ -699,7 +700,7 @@ include:
 ##### Sample model file
 TODO
 
-### Dashboards
+### Dashboards [AS OF 8/24/23 THIS IS WIP AND NOT FINALIZED YET]
 #### LookML dashboard and user-defined dashboards
 [LookML dashboards](https://docs.looker.com/reference/lookml-dashboard-overview) are stored as version-controlled files associated with the project in a Git repository. They also provide LookML developers with a way to update or modify a dashboard in bulk.
 
